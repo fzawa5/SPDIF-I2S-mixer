@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <limits.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -345,20 +346,30 @@ int main(void)
 
       // write SPDIF TX data
       for (i = 0; i < TRANSFER_UNIT; i++) {
-        uint32_t tx_data = 0;
+        int32_t tx_data = 0;
 
-        // mix SPDIF RX sample only if available
+        // mix SPDIF RX sample (24bit) only if available
         if (__spdif_rx_readable_buf) {
-          tx_data = __spdif_rx_readable_buf[i];
+          tx_data = (int32_t) (__spdif_rx_readable_buf[i] << 8);
         }
 
         // mix I2S RX sample (32bit) only if available
         if (__i2s_rx_readable_buf) {
-          tx_data += __i2s_rx_readable_buf[i] >> 8;
+          int32_t rx_data = __i2s_rx_readable_buf[i];
+          if (tx_data >= 0) {
+              if (INT_MAX - tx_data <= rx_data) {
+                rx_data = INT_MAX - tx_data;
+              }
+          } else {
+              if (INT_MIN - tx_data >= rx_data) {
+                rx_data = INT_MIN - tx_data;
+              }
+          }
+          tx_data += rx_data;
         }
 
-        // write mixed sample
-        __spdif_tx_writable_buf[i] = tx_data & 0x00FFFFFF;
+        // write mixed sample (24bit)
+        __spdif_tx_writable_buf[i] = ((uint32_t) tx_data) >> 8;
       }
 
       // turn on LED during sending audio samples
